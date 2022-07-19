@@ -14,6 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+// July 2022:
+// - Rebranding Cube-OS
+// - add feature client to display chunck progress
 
 use cbor_protocol;
 use failure::Fail;

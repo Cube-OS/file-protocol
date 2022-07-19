@@ -16,7 +16,7 @@
 //
 // July 2022:
 // - Rebranding Cube-OS
-// - add feature client
+// - add feature client to display chunck progress
 
 use crate::error::ProtocolError;
 use blake2_rfc::blake2s::Blake2s;
