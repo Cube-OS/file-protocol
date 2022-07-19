@@ -17,7 +17,7 @@
 use crate::error::ProtocolError;
 use blake2_rfc::blake2s::Blake2s;
 use log::warn;
-use serde_cbor::{de, to_vec, Value};
+use serde_cbor::{de, to_vec, Value, value::from_value};
 use std::fs;
 use std::fs::File;
 use std::fs::Permissions;
@@ -140,28 +140,26 @@ pub fn load_meta(prefix: &str, hash: &str) -> Result<u32, ProtocolError> {
     })?;
 
     // Returned data should be CBOR: '[["num_chunks", value]]'
-    let num_chunks = metadata
-        .as_array()
-        .and_then(|data| data[0].as_array())
+    // let num_chunks = metadata
+        // .as_array()
+    let num_chunks: u32 = from_value::<Vec<Value>>(metadata)
+        .and_then(|data| from_value::<Vec<Value>>(data[0].clone()))
         .and_then(|data| {
             let mut entries = data.iter();
 
-            entries
+            Ok(entries
                 .next()
-                .and_then(|val| val.as_string())
+                .and_then(|val| Some(from_value::<String>(val.clone()).unwrap()))
                 .and_then(|key| {
                     if key == "num_chunks" {
-                        entries.next().and_then(|val| val.as_u64())
+                        entries.next().and_then(|val| Some(from_value::<u32>(val.clone()).unwrap()))
                     } else {
                         None
                     }
-                })
-        })
-        .ok_or_else(|| {
-            ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())
-        })?;
+                }))
+        })?.unwrap();
 
-    Ok(num_chunks as u32)
+    Ok(num_chunks)
 }
 
 // Check if all of a files chunks are present in the temporary directory

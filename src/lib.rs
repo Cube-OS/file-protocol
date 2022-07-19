@@ -111,7 +111,13 @@ pub enum Message {
     /// Receiver has successfully gotten all data chunks of the requested file
     ACK(u32, String),
     /// Receiver is missing the specified file data chunks
-    NAK(u32, String, Option<Vec<(u32, u32)>>),
+    NAK(
+        u32, 
+        String, 
+        Option<Vec<(u32, u32)>>,
+        #[cfg(feature = "client")]
+        u32,
+    ),
     /// (Client Only) Message requesting the recipient to receive the specified file
     ReqReceive(u32, String, String, Option<u32>),
     /// (Client Only) Message requesting the recipient to transmit the specified file
