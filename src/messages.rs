@@ -32,6 +32,11 @@ pub fn export_request(
     num_chunks: u32,
 ) -> Result<Vec<u8>, ProtocolError> {
     info!(
+        "-> {{ Chn_id:{}, export, #:{}, {}, mode:{} }}",
+        channel_id, hash, target_path, mode,
+    );
+    #[cfg(feature = "client")]
+    info!(
         "-> {{ Chn_id:{}, export, #:{}, {}, mode:{}, num_chunks {} }}",
         channel_id, hash, target_path, mode, num_chunks,
     );

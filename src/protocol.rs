@@ -34,6 +34,7 @@ use std::net::SocketAddr;
 use std::str;
 use std::thread;
 use std::time::Duration;
+use hal_stream::Stream;
 
 /// Configuration data for Protocol
 #[derive(Clone)]
@@ -75,9 +76,9 @@ impl ProtocolConfig {
 }
 
 /// File protocol information structure
-pub struct Protocol {
-    cbor_proto: CborProtocol,
-    remote_addr: Cell<SocketAddr>,
+pub struct Protocol<T> {
+    cbor_proto: CborProtocol<T>,
+    // remote_addr: Cell<SocketAddr>,
     config: ProtocolConfig,
 }
 
@@ -126,7 +127,7 @@ pub enum State {
     Done,
 }
 
-impl Protocol {
+impl <T: Stream> Protocol<T> {
     /// Create a new file protocol instance using an automatically assigned UDP socket
     ///
     /// # Arguments
@@ -148,22 +149,22 @@ impl Protocol {
     /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "192.168.0.1:7000", config);
     /// ```
     ///
-    pub fn new(host_addr: &str, remote_addr: &str, config: ProtocolConfig) -> Self {
+    pub fn new(handle: T, config: ProtocolConfig) -> Self {
         // Get a local UDP socket (Bind)
-        let c_protocol = CborProtocol::new(host_addr, config.transfer_chunk_size);
+        let c_protocol = CborProtocol::new(handle, config.transfer_chunk_size);
 
         // Set up the full connection info
         Protocol {
             cbor_proto: c_protocol,
-            remote_addr: Cell::new(
-                remote_addr
-                    .parse::<SocketAddr>()
-                    .map_err(|err| {
-                        error!("Failed to parse remote_addr: {:?}", err);
-                        err
-                    })
-                    .unwrap(),
-            ),
+            // remote_addr: Cell::new(
+            //     remote_addr
+            //         .parse::<SocketAddr>()
+            //         .map_err(|err| {
+            //             error!("Failed to parse remote_addr: {:?}", err);
+            //             err
+            //         })
+            //         .unwrap(),
+            // ),
             config,
         }
     }
@@ -192,7 +193,7 @@ impl Protocol {
     /// ```
     ///
     pub fn send(&self, vec: &[u8]) -> Result<(), ProtocolError> {
-        self.cbor_proto.send_message(&vec, self.remote_addr.get())?;
+        self.cbor_proto.send_message(&vec)?;
         Ok(())
     }
 
@@ -490,7 +491,14 @@ impl Protocol {
         for (first, last) in chunks {
             for chunk_index in *first..*last {
                 match storage::load_chunk(&self.config.storage_prefix, hash, chunk_index) {
-                    Ok(c) => self.send(&messages::chunk(channel_id, hash, chunk_index, &c, num_chunks)?)?,
+                    Ok(c) => self.send(&messages::chunk(
+                        channel_id,
+                        hash, 
+                        chunk_index, 
+                        &c, 
+                        #[cfg(feature = "client")]
+                        num_chunks
+                    )?)?,
                     Err(e) => {
                         warn!("Failed to load chunk {}:{} : {}", hash, chunk_index, e);
                         storage::delete_file(&self.config.storage_prefix, hash)?;
@@ -750,6 +758,7 @@ impl Protocol {
                         // TODO: Figure out hash verification here
                         new_state = State::TransmittingDone;
                     }
+                    #[cfg(feature = "client")]
                     Message::NAK(channel_id, hash, Some(missing_chunks), num_chunks) => {
                         info!(
                             "<- {{ {}, {}, false, {:?} }}",
@@ -764,7 +773,29 @@ impl Protocol {
                         };
                         new_state = State::Transmitting;
                     }
+                    #[cfg(not(feature = "client"))]
+                    Message::NAK(channel_id, hash, Some(missing_chunks)) => {
+                        info!(
+                            "<- {{ {}, {}, false, {:?} }}",
+                            channel_id, hash, missing_chunks
+                        );
+                        match self.send_chunks(*channel_id, &hash, &missing_chunks) {
+                            Ok(()) => {}
+                            Err(error) => self.send(&messages::operation_failure(
+                                *channel_id,
+                                &format!("{}", error),
+                            )?)?,
+                        };
+                        new_state = State::Transmitting;
+                    }
+                    #[cfg(feature = "client")]
                     Message::NAK(channel_id, hash, None, _num_chunks) => {
+                        info!("<- {{ {}, {}, false }}", channel_id, hash);
+                        // TODO: Maybe trigger a failure?
+                        new_state = state.clone();
+                    }
+                    #[cfg(not(feature = "client"))]
+                    Message::NAK(channel_id, hash, None) => {
                         info!("<- {{ {}, {}, false }}", channel_id, hash);
                         // TODO: Maybe trigger a failure?
                         new_state = state.clone();

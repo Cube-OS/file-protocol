@@ -279,17 +279,18 @@ pub fn parse_success_transmit(
                 }
             };
 
-            // let num_chunks = match pieces.next().ok_or_else(|| {
-            //     ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
-            // })? {
-            //     Value::Integer(val) => *val,
-            //     _ => {
-            //         return Err(ProtocolError::InvalidParam(
-            //             "success".to_owned(),
-            //             "num chunks".to_owned(),
-            //         ));
-            //     }
-            // };
+            #[cfg(not(feature = "client"))]
+            let num_chunks = match pieces.next().ok_or_else(|| {
+                ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
+            })? {
+                Value::Integer(val) => *val,
+                _ => {
+                    return Err(ProtocolError::InvalidParam(
+                        "success".to_owned(),
+                        "num chunks".to_owned(),
+                    ));
+                }
+            };
 
             let mode = match pieces.next() {
                 Some(Value::Integer(val)) => Some(*val as u32),
@@ -299,7 +300,7 @@ pub fn parse_success_transmit(
             // Return the file info
             return Ok(Some(Message::SuccessTransmit(
                 channel_id,
-                hash.to_string(),
+                hash.to_string(),                
                 num_chunks as u32,
                 mode,
             )));
@@ -380,11 +381,19 @@ pub fn parse_nak(
                 remaining_chunks.push((first, last));
             }
 
+            #[cfg(feature = "client")]
+            return Ok(Some(Message::NAK(
+                channel_id,
+                hash.to_owned(),
+                Some(remaining_chunks),                
+                num_chunks,
+            )));
+
+            #[cfg(not(feature = "client"))]
             return Ok(Some(Message::NAK(
                 channel_id,
                 hash.to_owned(),
                 Some(remaining_chunks),
-                num_chunks,
             )));
         }
     }
