@@ -127,7 +127,10 @@ pub enum State {
     Done,
 }
 
-impl <T: Stream> Protocol<T> {
+impl <T: Stream> Protocol<T> 
+where 
+    std::io::Error: From<<T as Stream>::StreamError>,
+{
     /// Create a new file protocol instance using an automatically assigned UDP socket
     ///
     /// # Arguments
