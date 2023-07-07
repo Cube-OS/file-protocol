@@ -28,12 +28,12 @@ pub fn export_request(
     hash: &str,
     target_path: &str,
     mode: u32,
-    #[cfg(feature = "client")]
-    num_chunks: u32,
+    // #[cfg(feature = "client")]
+    // num_chunks: u32,
 ) -> Result<Vec<u8>, ProtocolError> {
     info!(
-        "-> {{ Chn_id:{}, export, #:{}, {}, mode:{}, num_chunks {} }}",
-        channel_id, hash, target_path, mode, num_chunks,
+        "-> {{ Chn_id:{}, export, #:{}, {}, mode:{}}}",
+        channel_id, hash, target_path, mode
     );
 
     ser::to_vec_packed(&(channel_id, "export", hash, target_path, mode)).map_err(|err| {
@@ -117,14 +117,14 @@ pub fn chunk(
     hash: &str,
     index: u32,
     chunk: &[u8],
-    #[cfg(feature = "client")]
-    num_chunks: u32,
+    // #[cfg(feature = "client")]
+    // num_chunks: u32,
 ) -> Result<Vec<u8>, ProtocolError> {
     let chunk_bytes = Value::Bytes(chunk.to_vec());
-    #[cfg(not(feature = "client"))]
+    // #[cfg(not(feature = "client"))]
     info!("-> {{ {}, {}, {}, chunk_data }}", channel_id, hash, index);
-    #[cfg(feature = "client")]
-    info!("-> {{ Chn:{}, #:{}, Progress:{}/{} chunk_data }}", channel_id, hash, index, num_chunks);
+    // #[cfg(feature = "client")]
+    // info!("-> {{ Chn:{}, #:{}, Progress:{}/{} chunk_data }}", channel_id, hash, index, num_chunks);
     ser::to_vec_packed(&(channel_id, hash, index, chunk_bytes)).map_err(|err| {
         ProtocolError::MessageCreationError {
             message: "chunk".to_owned(),
