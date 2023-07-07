@@ -37,7 +37,7 @@ use std::time::Duration;
 use hal_stream::Stream;
 
 /// Configuration data for Protocol
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct ProtocolConfig {
     // Name of folder used to store protocol metadata
     storage_prefix: String,
@@ -76,6 +76,8 @@ impl ProtocolConfig {
 }
 
 /// File protocol information structure
+/// 
+#[derive(Debug)]
 pub struct Protocol<T> {
     cbor_proto: CborProtocol<T>,
     // remote_addr: Cell<SocketAddr>,
@@ -127,7 +129,7 @@ pub enum State {
     Done,
 }
 
-impl <T: Stream> Protocol<T> 
+impl <T: Stream + std::fmt::Debug> Protocol<T> 
 where 
     std::io::Error: From<<T as Stream>::StreamError>,
 {
@@ -414,34 +416,34 @@ where
     }
 
     /// Get the the total number of chunks for the import file
-    ///
+    //
     // #[cfg(feature = "client")]
-    // pub fn get_import_size(&self, message: Value) -> Result<(u32, Value), ProtocolError>{
-    //     let recv_message = message.clone();        
-    //     let raw = match message {
-    //         Value::Array(val) => val.to_owned(),
-    //         _ => {
-    //             return Err(ProtocolError::MessageParseError {
-    //                 err: "Data not an array".to_owned(),
-    //             });
-    //         }
-    //     };
+    pub fn get_import_size(&self, message: Value) -> Result<(u32, Value), ProtocolError>{
+        let recv_message = message.clone();        
+        let raw = match message {
+            Value::Array(val) => val.to_owned(),
+            _ => {
+                return Err(ProtocolError::MessageParseError {
+                    err: "Data not an array".to_owned(),
+                });
+            }
+        };
         
-    //     let mut pieces = raw.iter();
+        let mut pieces = raw.iter();
 
-    //     let _ackmsg = pieces.next();
-    //     let _chn = pieces.next();
-    //     let _hash = pieces.next();
+        let _ackmsg = pieces.next();
+        let _chn = pieces.next();
+        let _hash = pieces.next();
 
-    //     let num_chunks = match pieces.next().ok_or_else(|| {
-    //         ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
-    //     })? {
-    //         Value::Integer(val) => *val as u32,
-    //         _ => 9999
-    //     };
+        let num_chunks = match pieces.next().ok_or_else(|| {
+            ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
+        })? {
+            Value::Integer(val) => *val as u32,
+            _ => 9999
+        };
 
-    //     Ok((num_chunks, recv_message))
-    // }
+        Ok((num_chunks, recv_message))
+    }
 
     // Verify the integrity of received file data and then transfer into the requested permanent file location.
     // Notify the connection peer of the results

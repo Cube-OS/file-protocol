@@ -13,6 +13,7 @@ blake2-rfc = "0.2.18"
 serde = { version = "1.0", default-features = false }
 rand = "0.5"
 cbor-protocol = { git = "ssh://git@github.com/Cube-OS/cbor-protocol.git", branch = "stream"}  
+
 failure = "0.1.8"
 hal-stream = { git = "ssh://git@github.com/Cube-OS/hal-stream.git"}
 
