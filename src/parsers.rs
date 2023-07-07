@@ -54,8 +54,8 @@ pub fn parse_channel_id(message: &Value) -> Result<u32, ProtocolError> {
 
 pub fn parse_message(
     message: Value,
-    #[cfg(feature = "client")]
-    num_chunks: u32,
+    // #[cfg(feature = "client")]
+    // num_chunks: u32,
 ) -> Result<Message, ProtocolError> {
     let raw = match message {
         Value::Array(val) => val.to_owned(),
@@ -91,8 +91,8 @@ pub fn parse_message(
         }
         if let Some(msg) = parse_success_transmit(
             channel_id,
-            #[cfg(feature = "client")]
-            num_chunks,
+            // #[cfg(feature = "client")]
+            // num_chunks,
             pieces.to_owned()
         )? {
             return Ok(msg);
@@ -105,8 +105,8 @@ pub fn parse_message(
         }
         if let Some(msg) = parse_nak(
             channel_id, 
-            #[cfg(feature = "client")]
-            num_chunks, 
+            // #[cfg(feature = "client")]
+            // num_chunks, 
             pieces.to_owned()
         )? {
             return Ok(msg);
@@ -261,8 +261,8 @@ pub fn parse_success_receive(
 // { channel_id, "true", ..values }
 pub fn parse_success_transmit(
     channel_id: u32,
-    #[cfg(feature = "client")]
-    num_chunks: u32,
+    // #[cfg(feature = "client")]
+    // num_chunks: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
     if let Some(Value::Bool(true)) = pieces.next() {
@@ -279,7 +279,6 @@ pub fn parse_success_transmit(
                 }
             };
 
-            #[cfg(not(feature = "client"))]
             let num_chunks = match pieces.next().ok_or_else(|| {
                 ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
             })? {
@@ -361,8 +360,8 @@ pub fn parse_ack(
 // { hash, false, ..missing_chunks }
 pub fn parse_nak(
     channel_id: u32,
-    #[cfg(feature = "client")]
-    num_chunks: u32,
+    // #[cfg(feature = "client")]
+    // num_chunks: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
     if let Some(Value::Text(hash)) = pieces.next() {
@@ -381,19 +380,20 @@ pub fn parse_nak(
                 remaining_chunks.push((first, last));
             }
 
-            #[cfg(feature = "client")]
-            return Ok(Some(Message::NAK(
-                channel_id,
-                hash.to_owned(),
-                Some(remaining_chunks),                
-                num_chunks,
-            )));
+            // #[cfg(feature = "client")]
+            // return Ok(Some(Message::NAK(
+            //     channel_id,
+            //     hash.to_owned(),
+            //     Some(remaining_chunks),                
+            //     num_chunks,
+            // )));
 
-            #[cfg(not(feature = "client"))]
+            // #[cfg(not(feature = "client"))]
             return Ok(Some(Message::NAK(
                 channel_id,
                 hash.to_owned(),
                 Some(remaining_chunks),
+                // num_chunks,
             )));
         }
     }

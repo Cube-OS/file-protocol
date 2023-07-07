@@ -119,8 +119,8 @@ pub enum Message {
         u32, 
         String, 
         Option<Vec<(u32, u32)>>,
-        #[cfg(feature = "client")]
-        u32,
+        // #[cfg(feature = "client")]
+        // u32,
     ),
     /// (Client Only) Message requesting the recipient to receive the specified file
     ReqReceive(u32, String, String, Option<u32>),

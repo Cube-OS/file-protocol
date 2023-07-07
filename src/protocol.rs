@@ -337,16 +337,16 @@ where
         hash: &str,
         target_path: &str,
         mode: u32,
-        #[cfg(feature = "client")]
-        num_chunks: u32,
+        // #[cfg(feature = "client")]
+        // num_chunks: u32,
     ) -> Result<(), ProtocolError> {
         self.send(&messages::export_request(
             channel_id,
             hash,
             target_path,
             mode,
-            #[cfg(feature = "client")]
-            num_chunks,
+            // #[cfg(feature = "client")]
+            // num_chunks,
         )?)?;
 
         Ok(())
@@ -415,33 +415,33 @@ where
 
     /// Get the the total number of chunks for the import file
     ///
-    #[cfg(feature = "client")]
-    pub fn get_import_size(&self, message: Value) -> Result<(u32, Value), ProtocolError>{
-        let recv_message = message.clone();        
-        let raw = match message {
-            Value::Array(val) => val.to_owned(),
-            _ => {
-                return Err(ProtocolError::MessageParseError {
-                    err: "Data not an array".to_owned(),
-                });
-            }
-        };
+    // #[cfg(feature = "client")]
+    // pub fn get_import_size(&self, message: Value) -> Result<(u32, Value), ProtocolError>{
+    //     let recv_message = message.clone();        
+    //     let raw = match message {
+    //         Value::Array(val) => val.to_owned(),
+    //         _ => {
+    //             return Err(ProtocolError::MessageParseError {
+    //                 err: "Data not an array".to_owned(),
+    //             });
+    //         }
+    //     };
         
-        let mut pieces = raw.iter();
+    //     let mut pieces = raw.iter();
 
-        let _ackmsg = pieces.next();
-        let _chn = pieces.next();
-        let _hash = pieces.next();
+    //     let _ackmsg = pieces.next();
+    //     let _chn = pieces.next();
+    //     let _hash = pieces.next();
 
-        let num_chunks = match pieces.next().ok_or_else(|| {
-            ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
-        })? {
-            Value::Integer(val) => *val as u32,
-            _ => 9999
-        };
+    //     let num_chunks = match pieces.next().ok_or_else(|| {
+    //         ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
+    //     })? {
+    //         Value::Integer(val) => *val as u32,
+    //         _ => 9999
+    //     };
 
-        Ok((num_chunks, recv_message))
-    }
+    //     Ok((num_chunks, recv_message))
+    // }
 
     // Verify the integrity of received file data and then transfer into the requested permanent file location.
     // Notify the connection peer of the results
@@ -487,21 +487,14 @@ where
         channel_id: u32,
         hash: &str,
         chunks: &[(u32, u32)],
-        #[cfg(feature = "client")]
-        num_chunks: u32,
+        // #[cfg(feature = "client")]
+        // num_chunks: u32,
     ) -> Result<(), ProtocolError> {
         let mut chunks_transmitted = 0;
         for (first, last) in chunks {
             for chunk_index in *first..*last {
                 match storage::load_chunk(&self.config.storage_prefix, hash, chunk_index) {
-                    Ok(c) => self.send(&messages::chunk(
-                        channel_id,
-                        hash, 
-                        chunk_index, 
-                        &c, 
-                        #[cfg(feature = "client")]
-                        num_chunks
-                    )?)?,
+                    Ok(c) => self.send(&messages::chunk(channel_id, hash, chunk_index, &c)?)?,
                     Err(e) => {
                         warn!("Failed to load chunk {}:{} : {}", hash, chunk_index, e);
                         storage::delete_file(&self.config.storage_prefix, hash)?;
@@ -554,8 +547,8 @@ where
         pump: F,
         timeout: Duration,
         start_state: &State,
-        #[cfg(feature = "client")]
-        num_chunks: u32,
+        // #[cfg(feature = "client")]
+        // num_chunks: u32,
     ) -> Result<(), ProtocolError>
     where
         F: Fn(Duration) -> Result<Value, ProtocolError>,
@@ -659,8 +652,8 @@ where
             match self.process_message(
                 message,
                 &state,
-                #[cfg(feature = "client")]
-                num_chunks
+                // #[cfg(feature = "client")]
+                // num_chunks
             ) {
                 Ok(new_state) => state = new_state,
                 Err(e) => return Err(e),
@@ -720,13 +713,13 @@ where
         &self, 
         message: Value, 
         state: &State,
-        #[cfg(feature = "client")]
-        num_chunks: u32,
+        // #[cfg(feature = "client")]
+        // num_chunks: u32,
     ) -> Result<State, ProtocolError> {
         let parsed_message = parsers::parse_message(
             message,
-            #[cfg(feature = "client")]
-            num_chunks,
+            // #[cfg(feature = "client")]
+            // num_chunks,
         )?;
         let new_state;
         match parsed_message.to_owned() {
@@ -761,22 +754,6 @@ where
                         // TODO: Figure out hash verification here
                         new_state = State::TransmittingDone;
                     }
-                    #[cfg(feature = "client")]
-                    Message::NAK(channel_id, hash, Some(missing_chunks), num_chunks) => {
-                        info!(
-                            "<- {{ {}, {}, false, {:?} }}",
-                            channel_id, hash, missing_chunks
-                        );
-                        match self.send_chunks(*channel_id, &hash, &missing_chunks, *num_chunks) {
-                            Ok(()) => {}
-                            Err(error) => self.send(&messages::operation_failure(
-                                *channel_id,
-                                &format!("{}", error),
-                            )?)?,
-                        };
-                        new_state = State::Transmitting;
-                    }
-                    #[cfg(not(feature = "client"))]
                     Message::NAK(channel_id, hash, Some(missing_chunks)) => {
                         info!(
                             "<- {{ {}, {}, false, {:?} }}",
@@ -791,8 +768,7 @@ where
                         };
                         new_state = State::Transmitting;
                     }
-                    #[cfg(feature = "client")]
-                    Message::NAK(channel_id, hash, None, _num_chunks) => {
+                    Message::NAK(channel_id, hash, None) => {
                         info!("<- {{ {}, {}, false }}", channel_id, hash);
                         // TODO: Maybe trigger a failure?
                         new_state = state.clone();
