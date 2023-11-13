@@ -33,6 +33,7 @@ use std::str;
 use std::thread;
 use std::time::Duration;
 use time;
+use serde_cbor::value::from_value;
 
 const HASH_SIZE: usize = 16;
 
@@ -144,26 +145,25 @@ pub fn load_meta(prefix: &str, hash: &str) -> Result<u32, ProtocolError> {
     })?;
 
     // Returned data should be CBOR: '[["num_chunks", value]]'
-    let num_chunks = metadata
-        .as_array()
-        .and_then(|data| data[0].as_array())
+    let num_chunks: u32 = from_value::<Vec<Value>>(metadata)
+        .and_then(|data| from_value::<Vec<Value>>(data[0].clone()))
         .and_then(|data| {
             let mut entries = data.iter();
 
-            entries
+            Ok(entries
                 .next()
-                .and_then(|val| val.as_string())
+                .and_then(|val| Some(from_value::<String>(val.clone()).unwrap()))
                 .and_then(|key| {
                     if key == "num_chunks" {
-                        entries.next().and_then(|val| val.as_u64())
+                        entries.next().and_then(|val| Some(from_value::<u32>(val.clone()).unwrap()))
                     } else {
                         None
                     }
-                })
-        })
-        .ok_or_else(|| {
-            ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())
-        })?;
+                }))
+        })?.unwrap();
+        // .ok_or_else(|| {
+        //     ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())
+        // })?;
 
     Ok(num_chunks as u32)
 }

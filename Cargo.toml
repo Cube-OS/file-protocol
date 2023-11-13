@@ -12,5 +12,6 @@ time = "0.1"
 blake2-rfc = "0.2.18"
 serde = { version = "1.0", default-features = false }
 rand = "0.5"
-cbor-protocol = { git = "ssh://git@github.com/Cube-OS/cbor-protocol.git"}  
+# cbor-protocol = { git = "ssh://git@github.com/Cube-OS/cbor-protocol.git"}  
+cbor-protocol = { path = "../cbor-protocol" }
 failure = "0.1.8"
