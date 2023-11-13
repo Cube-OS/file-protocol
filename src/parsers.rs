@@ -39,7 +39,7 @@ pub fn parse_channel_id(message: &Value) -> Result<u32, ProtocolError> {
         })?
         .to_owned();
 
-    if let Value::U64(channel_id) = first_param {
+    if let Value::Integer(channel_id) = first_param {
         Ok(channel_id as u32)
     } else {
         Err(ProtocolError::MessageParseError {
@@ -67,7 +67,7 @@ pub fn parse_message(message: Value) -> Result<Message, ProtocolError> {
         })?
         .to_owned();
 
-    if let Value::U64(channel) = channel_param {
+    if let Value::Integer(channel) = channel_param {
         let channel_id = channel as u32;
         if let Some(msg) = parse_cleanup_request(channel_id, pieces.to_owned())? {
             return Ok(msg);
@@ -112,10 +112,10 @@ pub fn parse_cleanup_request(
     channel_id: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
-    if let Some(Value::String(op)) = pieces.next() {
+    if let Some(Value::Text(op)) = pieces.next() {
         if op == "cleanup" {
             match pieces.next() {
-                Some(Value::String(hash)) => {
+                Some(Value::Text(hash)) => {
                     return Ok(Some(Message::Cleanup(channel_id, Some(hash.to_owned()))));
                 }
                 Some(Value::Null) => return Ok(Some(Message::Cleanup(channel_id, None))),
@@ -139,12 +139,12 @@ pub fn parse_export_request(
     channel_id: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
-    if let Some(Value::String(op)) = pieces.next() {
+    if let Some(Value::Text(op)) = pieces.next() {
         if op == "export" {
             let hash = match pieces.next().ok_or_else(|| {
                 ProtocolError::MissingParam("export".to_owned(), "hash".to_owned())
             })? {
-                Value::String(val) => val,
+                Value::Text(val) => val,
                 _ => {
                     return Err(ProtocolError::InvalidParam(
                         "export".to_owned(),
@@ -156,7 +156,7 @@ pub fn parse_export_request(
             let path = match pieces.next().ok_or_else(|| {
                 ProtocolError::MissingParam("export".to_owned(), "path".to_owned())
             })? {
-                Value::String(val) => val,
+                Value::Text(val) => val,
                 _ => {
                     return Err(ProtocolError::InvalidParam(
                         "export".to_owned(),
@@ -166,7 +166,7 @@ pub fn parse_export_request(
             };
 
             let mode = match pieces.next() {
-                Some(Value::U64(num)) => Some(*num as u32),
+                Some(Value::Integer(num)) => Some(*num as u32),
                 _ => None,
             };
 
@@ -188,12 +188,12 @@ pub fn parse_import_request(
     channel_id: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
-    if let Some(Value::String(op)) = pieces.next() {
+    if let Some(Value::Text(op)) = pieces.next() {
         if op == "import" {
             let path = match pieces.next().ok_or_else(|| {
                 ProtocolError::MissingParam("export".to_owned(), "hash".to_owned())
             })? {
-                Value::String(val) => val,
+                Value::Text(val) => val,
                 _ => {
                     return Err(ProtocolError::InvalidParam(
                         "export".to_owned(),
@@ -221,7 +221,7 @@ pub fn parse_success_receive(
         // Good - { channel_id, true, hash}
         if let Some(piece) = pieces.next() {
             let hash = match piece {
-                Value::String(val) => val,
+                Value::Text(val) => val,
                 _ => {
                     return Err(ProtocolError::InvalidParam(
                         "success_receive".to_owned(),
@@ -250,7 +250,7 @@ pub fn parse_success_transmit(
         if let Some(piece) = pieces.next() {
             // It's a good result after an 'import' operation
             let hash = match piece {
-                Value::String(val) => val,
+                Value::Text(val) => val,
                 _ => {
                     return Err(ProtocolError::InvalidParam(
                         "success".to_owned(),
@@ -262,7 +262,7 @@ pub fn parse_success_transmit(
             let num_chunks = match pieces.next().ok_or_else(|| {
                 ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
             })? {
-                Value::U64(val) => *val,
+                Value::Integer(val) => *val,
                 _ => {
                     return Err(ProtocolError::InvalidParam(
                         "success".to_owned(),
@@ -272,7 +272,7 @@ pub fn parse_success_transmit(
             };
 
             let mode = match pieces.next() {
-                Some(Value::U64(val)) => Some(*val as u32),
+                Some(Value::Integer(val)) => Some(*val as u32),
                 _ => None,
             };
 
@@ -300,7 +300,7 @@ pub fn parse_bad_op(
             .next()
             .ok_or_else(|| ProtocolError::MissingParam("failure".to_owned(), "error".to_owned()))?
         {
-            Value::String(val) => val,
+            Value::Text(val) => val,
             _ => {
                 return Err(ProtocolError::InvalidParam(
                     "failure".to_owned(),
@@ -321,7 +321,7 @@ pub fn parse_ack(
     channel_id: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
-    if let Some(Value::String(hash)) = pieces.next() {
+    if let Some(Value::Text(hash)) = pieces.next() {
         if let Some(Value::Bool(true)) = pieces.next() {
             // It's an ACK: { hash, true, num_chunks }
             // Our data transfer (export) completed successfully
@@ -342,12 +342,12 @@ pub fn parse_nak(
     channel_id: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
-    if let Some(Value::String(hash)) = pieces.next() {
+    if let Some(Value::Text(hash)) = pieces.next() {
         if let Some(Value::Bool(false)) = pieces.next() {
             let mut remaining_chunks: Vec<(u32, u32)> = vec![];
             let mut chunk_nums: Vec<u32> = vec![];
             for entry in pieces {
-                if let Value::U64(chunk_num) = entry {
+                if let Value::Integer(chunk_num) = entry {
                     chunk_nums.push(*chunk_num as u32);
                 }
             }
@@ -375,8 +375,8 @@ pub fn parse_chunk(
     channel_id: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
-    if let Some(Value::String(hash)) = pieces.next() {
-        if let Some(Value::U64(num)) = pieces.next() {
+    if let Some(Value::Text(hash)) = pieces.next() {
+        if let Some(Value::Integer(num)) = pieces.next() {
             if let Some(third_param) = pieces.next() {
                 if let Value::Bytes(data) = third_param {
                     return Ok(Some(Message::ReceiveChunk(
@@ -406,9 +406,9 @@ pub fn parse_sync(
     channel_id: u32,
     mut pieces: Iter<Value>,
 ) -> Result<Option<Message>, ProtocolError> {
-    if let Some(Value::String(hash)) = pieces.next() {
+    if let Some(Value::Text(hash)) = pieces.next() {
         if let Some(second_param) = pieces.next() {
-            if let Value::U64(num) = second_param {
+            if let Value::Integer(num) = second_param {
                 if pieces.next().is_none() {
                     // It's a sync message: { hash, num_chunks }
                     return Ok(Some(Message::Metadata(
