@@ -14,7 +14,3 @@ serde = { version = "1.0", default-features = false }
 rand = "0.5"
 cbor-protocol = { git = "ssh://git@github.com/Cube-OS/cbor-protocol.git"}  
 failure = "0.1.8"
-
-[features]
-default = []
-client = []
