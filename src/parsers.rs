@@ -41,12 +41,6 @@ pub fn parse_channel_id(message: &[u8]) -> Result<u32, ProtocolError> {
         Message::NAK { channel_id, .. } => channel_id,
         Message::ReceiveChunk { channel_id, .. } => channel_id,
         Message::Metadata { channel_id, .. } => channel_id,
-        _ => {
-            return Err(ProtocolError::MessageParseError {
-                err: "No channel ID found".to_owned(),
-            });
-        }
-        // Add more variants as needed
     };
 
     Ok(channel_id)

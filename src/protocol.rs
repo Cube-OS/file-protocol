@@ -20,7 +20,7 @@
 
 //! File transfer protocol module
 
-use super::parsers;
+
 use super::storage;
 use super::Message;
 use crate::error::ProtocolError;
@@ -761,7 +761,7 @@ impl Protocol {
     ///
     pub fn process_message(&self, message: &[u8], state: &State) -> Result<State, ProtocolError> {
         let parsed_message = bincode::deserialize::<Message>(message)?;
-        let mut new_state;
+        let new_state;
         match parsed_message {
             Message::Sync{channel_id, hash} => {
                 info!("<- {{ {}, {} }}", channel_id, hash);
@@ -787,7 +787,7 @@ impl Protocol {
                 )?;
                 new_state = state.clone();
             }
-            Message::ACK{channel_id, hash} => {
+            Message::ACK{channel_id: _, hash} => {
                 info!("<- {{ {}, true }}", hash);
                 // TODO: Figure out hash verification here
                 let (transmitted, total) = match state {
@@ -938,7 +938,7 @@ impl Protocol {
                 new_state = State::Done;
                 storage::delete_file(&self.config.storage_prefix, &hash)?;
             }
-            Message::SuccessTransmit{channel_id, file_name, hash, num_chunks, mode, last} => {
+            Message::SuccessTransmit{channel_id, file_name: _, hash, num_chunks, mode, last: _} => {
                 match mode {
                     Some(value) => info!(
                         "<- {{ {}, true, {}, {}, {} }}",
