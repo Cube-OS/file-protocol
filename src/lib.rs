@@ -105,7 +105,7 @@ pub use crate::parsers::parse_channel_id;
 use serde::{Serialize,Deserialize};
 
 /// File protocol message types
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Message {
     /// TODO: Decide whether or not to keep this
     /// channel_id
@@ -130,4 +130,86 @@ pub enum Message {
     Failure{channel_id: u32, error: String},
     /// Request Cleanup of either whole storage directory or individual file's storage
     Cleanup{channel_id: u32, hash: Option<String>},
+}
+
+impl std::fmt::Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Message::ReceiveChunk { channel_id, hash, chunk_num, .. } => {
+                f.debug_struct("ReceiveChunk")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .field("chunk_num", chunk_num)
+                    .finish()
+            }
+            Message::ACK { channel_id, hash } => {
+                f.debug_struct("ACK")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .finish()
+            }
+            Message::NAK { channel_id, hash, missing_chunks } => {
+                f.debug_struct("NAK")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .field("missing_chunks", missing_chunks)
+                    .finish()
+            }
+            Message::ReqReceive { channel_id, hash, path, mode } => {
+                f.debug_struct("ReqReceive")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .field("path", path)
+                    .field("mode", mode)
+                    .finish()
+            }
+            Message::ReqTransmit { channel_id, path } => {
+                f.debug_struct("ReqTransmit")
+                    .field("channel_id", channel_id)
+                    .field("path", path)
+                    .finish()
+            }
+            Message::SuccessReceive { channel_id, hash } => {
+                f.debug_struct("SuccessReceive")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .finish()
+            }
+            Message::SuccessTransmit { channel_id, file_name, hash, num_chunks, mode, last } => {
+                f.debug_struct("SuccessTransmit")
+                    .field("channel_id", channel_id)
+                    .field("file_name", file_name)
+                    .field("hash", hash)
+                    .field("num_chunks", num_chunks)
+                    .field("mode", mode)
+                    .field("last", last)
+                    .finish()
+            }
+            Message::Failure { channel_id, error } => {
+                f.debug_struct("Failure")
+                    .field("channel_id", channel_id)
+                    .field("error", error)
+                    .finish()
+            }
+            Message::Cleanup { channel_id, hash } => {
+                f.debug_struct("Cleanup")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .finish()
+            }
+            Message::Sync { channel_id, hash } => {
+                f.debug_struct("Sync")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .finish()
+            }
+            Message::Metadata { channel_id, hash, num_chunks } => {
+                f.debug_struct("Metadata")
+                    .field("channel_id", channel_id)
+                    .field("hash", hash)
+                    .field("num_chunks", num_chunks)
+                    .finish()
+            }            
+        }
+    }
 }

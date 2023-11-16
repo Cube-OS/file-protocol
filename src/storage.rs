@@ -65,9 +65,8 @@ pub fn store_chunk(prefix: &str, hash: &str, index: u32, data: &[u8]) -> Result<
 }
 
 pub fn store_meta(prefix: &str, hash: &str, num_chunks: u32) -> Result<(), ProtocolError> {
-    let data = vec![("num_chunks", num_chunks)];
-
-    let vec = bincode::serialize(&data)?;
+ 
+    let vec = bincode::serialize(&num_chunks)?;
 
     let file_dir = Path::new(&format!("{}/storage", prefix)).join(hash);
     // Make sure the directory exists
@@ -139,37 +138,9 @@ pub fn load_meta(prefix: &str, hash: &str) -> Result<u32, ProtocolError> {
             err,
         })?;
 
-    let metadata = bincode::deserialize::<Message>(&data).map_err(|err| {
+    let num_chunks = bincode::deserialize::<u32>(&data).map_err(|err| {
         ProtocolError::StorageParseError(format!("Unable to parse metadata for {}: {}", hash, err))
     })?;
-    // let metadata: Value = de::from_slice(&data).map_err(|err| {
-    //     ProtocolError::StorageParseError(format!("Unable to parse metadata for {}: {}", hash, err))
-    // })?;
-
-    // // Returned data should be CBOR: '[["num_chunks", value]]'
-    // let num_chunks: u32 = from_value::<Vec<Value>>(metadata)
-    //     .and_then(|data| from_value::<Vec<Value>>(data[0].clone()))
-    //     .and_then(|data| {
-    //         let mut entries = data.iter();
-
-    //         Ok(entries
-    //             .next()
-    //             .and_then(|val| Some(from_value::<String>(val.clone()).unwrap()))
-    //             .and_then(|key| {
-    //                 if key == "num_chunks" {
-    //                     entries.next().and_then(|val| Some(from_value::<u32>(val.clone()).unwrap()))
-    //                 } else {
-    //                     None
-    //                 }
-    //             }))
-    //     })?.unwrap();
-        // .ok_or_else(|| {
-        //     ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())
-        // })?;
-    let num_chunks = match metadata {
-        Message::Metadata { num_chunks, .. } => num_chunks,
-        _ => return Err(ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())),
-    };
 
     Ok(num_chunks as u32)
 }

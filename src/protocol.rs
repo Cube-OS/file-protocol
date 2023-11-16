@@ -241,7 +241,7 @@ impl Protocol {
     ///
     pub fn recv(&self, timeout: Option<Duration>) -> Result<Vec<u8>, ProtocolError> {
         let mut buf: Vec<u8> = vec![0; self.config.hash_chunk_size];
-        
+
         self.host.set_read_timeout(timeout).map_err(|err| {
             ProtocolError::ReceiveError {
                 err: format!("{}", err),
@@ -250,12 +250,14 @@ impl Protocol {
         
         match self.host.recv(&mut buf) {
             Ok(size) => Ok(buf[..size].to_vec()),
-            Err(err) => match err.kind() {
-                std::io::ErrorKind::WouldBlock => Err(ProtocolError::ReceiveTimeout),
-                _ => Err(ProtocolError::ReceiveError {
-                    err: format!("{}", err),
-                }),
-            },
+            Err(err) => {
+                match err.kind() {                                    
+                    std::io::ErrorKind::WouldBlock => Err(ProtocolError::ReceiveTimeout),
+                    _ => Err(ProtocolError::ReceiveError {
+                        err: format!("{}", err),
+                    }),
+                }
+            } 
         }
     }
 
@@ -316,6 +318,10 @@ impl Protocol {
         hash: &str,
         num_chunks: u32,
     ) -> Result<(), ProtocolError> {
+        info!("-> {{ {:?} }}", Message::Metadata{
+            channel_id,
+            hash: hash.to_owned(),
+            num_chunks,});
         Ok(self.send(Message::Metadata{
             channel_id,
             hash: hash.to_owned(),
@@ -365,6 +371,12 @@ impl Protocol {
         target_path: &str,
         mode: u32,
     ) -> Result<(), ProtocolError> {
+        info!("-> {{ {:?} }}", Message::ReqReceive {
+            channel_id,
+            hash: hash.to_owned(),
+            path: target_path.to_owned(),
+            mode: Some(mode),
+        });
         self.send(Message::ReqReceive {
             channel_id,
             hash: hash.to_owned(),
@@ -398,6 +410,10 @@ impl Protocol {
     /// ```
     ///
     pub fn send_import(&self, channel_id: u32) -> Result<(), ProtocolError> {
+        info!("-> {{ {:?} }}", Message::ReqTransmit {
+            channel_id,
+            path: None,
+        });
         Ok(self.send(Message::ReqTransmit {
             channel_id,
             path: None,
@@ -405,6 +421,10 @@ impl Protocol {
     }
 
     pub fn send_import_file(&self, channel_id: u32, source_path: &str) -> Result<(), ProtocolError> {
+        info!("-> {{ {:?} }}", Message::ReqTransmit {
+            channel_id,
+            path: Some(source_path.to_string()),
+        });
         Ok(self.send(Message::ReqTransmit {
             channel_id,
             path: Some(source_path.to_string()),
@@ -453,35 +473,6 @@ impl Protocol {
             self.config.hash_chunk_size,
         )
     }
-    
-    // /// Get the the total number of chunks for the import file
-    // ///
-    // pub fn get_import_size(&self, message: Value) -> Result<(u32, Value), ProtocolError>{
-    //     let recv_message = message.clone();        
-    //     let raw = match message {
-    //         Value::Array(val) => val.to_owned(),
-    //         _ => {
-    //             return Err(ProtocolError::MessageParseError {
-    //                 err: "Data not an array".to_owned(),
-    //             });
-    //         }
-    //     };
-
-    //     let mut pieces = raw.iter();
-
-    //     let _ackmsg = pieces.next();
-    //     let _chn = pieces.next();
-    //     let _hash = pieces.next();
-
-    //     let num_chunks = match pieces.next().ok_or_else(|| {
-    //         ProtocolError::MissingParam("success".to_owned(), "num chunks".to_owned())
-    //     })? {
-    //         Value::Integer(val) => *val as u32,
-    //         _ => 9999
-    //     };
-
-    //     Ok((num_chunks, recv_message))
-    // }
 
     // Verify the integrity of received file data and then transfer into the requested permanent file location.
     // Notify the connection peer of the results
@@ -545,7 +536,6 @@ impl Protocol {
                             chunk_num: chunk_index,
                             data: c,
                         };
-                        // info!("-> {{ {:?} }}", message);
                         self.send(message)?;
                     },
                     Err(e) => {
@@ -764,21 +754,21 @@ impl Protocol {
         let new_state;
         match parsed_message {
             Message::Sync{channel_id, hash} => {
-                info!("<- {{ {}, {} }}", channel_id, hash);
+                // info!("<- {{ {}, {} }}", channel_id, hash);
                 new_state = state.clone();
             }
             Message::Metadata{channel_id, hash, num_chunks} => {
-                info!("<- {{ {}, {}, {} }}", channel_id, hash, num_chunks);
+                // info!("<- {{ {}, {}, {} }}", channel_id, hash, num_chunks);
                 storage::store_meta(&self.config.storage_prefix, &hash, num_chunks)?;
                 new_state = State::StartReceive {
                     path: hash.to_owned(),
                 };
             }
             Message::ReceiveChunk{channel_id, hash, chunk_num, data} => {
-                info!(
-                    "<- {{ {}, {}, {}, chunk_data }}",
-                    channel_id, hash, chunk_num
-                );
+                // info!(
+                //     "<- {{ {}, {}, {}, chunk_data }}",
+                //     channel_id, hash, chunk_num
+                // );
                 storage::store_chunk(
                     &self.config.storage_prefix,
                     &hash,
@@ -788,7 +778,7 @@ impl Protocol {
                 new_state = state.clone();
             }
             Message::ACK{channel_id: _, hash} => {
-                info!("<- {{ {}, true }}", hash);
+                // info!("<- {{ {}, true }}", hash);
                 // TODO: Figure out hash verification here
                 let (transmitted, total) = match state {
                     State::Transmitting{transmitted_files, total_files} => {
@@ -806,10 +796,10 @@ impl Protocol {
                 }
             }
             Message::NAK{channel_id, hash, missing_chunks} => {
-                info!(
-                    "<- {{ {}, {}, false, {:?} }}",
-                    channel_id, hash, missing_chunks
-                );
+                // info!(
+                //     "<- {{ {}, {}, false, {:?} }}",
+                //     channel_id, hash, missing_chunks
+                // );
                 if missing_chunks.is_some() {
                     let mut remaining_chunks: Vec<(u32, u32)> = vec![];
                     for chunk in missing_chunks.as_ref().unwrap().chunks(2) {
@@ -831,10 +821,10 @@ impl Protocol {
                 }                        
             }
             Message::ReqReceive{channel_id, hash, path, mode} => {
-                info!(
-                    "<- {{ {}, export, {}, {}, {:?} }}",
-                    channel_id, hash, path, mode
-                );
+                // info!(
+                //     "<- {{ {}, export, {}, {}, {:?} }}",
+                //     channel_id, hash, path, mode
+                // );
                 // The client wants to send us a file.
                 // See what state the file is currently in on our side
                 match storage::validate_file(&self.config.storage_prefix, &hash, None) {
@@ -870,7 +860,7 @@ impl Protocol {
                 }
             }
             Message::ReqTransmit{channel_id, path} => {
-                info!("<- {{ {}, import }}", channel_id);
+                // info!("<- {{ {}, import }}", channel_id);
                 // Set up the requested file for transmission
                 if path.is_some() {
                     match self.initialize_file(path.as_ref().unwrap()) {
@@ -934,7 +924,7 @@ impl Protocol {
                 }                        
             }
             Message::SuccessReceive{channel_id, hash} => {
-                info!("<- {{ {}, true }}", channel_id);
+                // info!("<- {{ {}, true }}", channel_id);
                 new_state = State::Done;
                 storage::delete_file(&self.config.storage_prefix, &hash)?;
             }
@@ -990,14 +980,14 @@ impl Protocol {
                 }
             }
             Message::Failure{channel_id, error} => {
-                info!("<- {{ {}, false, {} }}", channel_id, error);
+                // info!("<- {{ {}, false, {} }}", channel_id, error);
                 return Err(ProtocolError::TransmissionError {
                     channel_id,
                     error_message: error.to_string(),
                 });
             }
             Message::Cleanup{channel_id, hash} => {
-                info!("<- {{ {}, cleanup, {:?} }}", channel_id, hash);
+                // info!("<- {{ {}, cleanup, {:?} }}", channel_id, hash);
                 if hash.is_some() {
                     storage::delete_file(&self.config.storage_prefix, hash.as_ref().unwrap())?;
                 } else {
