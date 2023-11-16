@@ -21,7 +21,6 @@
 use crate::error::ProtocolError;
 use blake2_rfc::blake2s::Blake2s;
 use log::warn;
-use serde_cbor::{de, to_vec, Value};
 use std::fs;
 use std::fs::File;
 use std::fs::Permissions;
@@ -33,7 +32,7 @@ use std::str;
 use std::thread;
 use std::time::Duration;
 use time;
-use serde_cbor::value::from_value;
+use crate::Message;
 
 const HASH_SIZE: usize = 16;
 
@@ -68,7 +67,7 @@ pub fn store_chunk(prefix: &str, hash: &str, index: u32, data: &[u8]) -> Result<
 pub fn store_meta(prefix: &str, hash: &str, num_chunks: u32) -> Result<(), ProtocolError> {
     let data = vec![("num_chunks", num_chunks)];
 
-    let vec = to_vec(&data)?;
+    let vec = bincode::serialize(&data)?;
 
     let file_dir = Path::new(&format!("{}/storage", prefix)).join(hash);
     // Make sure the directory exists
@@ -140,30 +139,37 @@ pub fn load_meta(prefix: &str, hash: &str) -> Result<u32, ProtocolError> {
             err,
         })?;
 
-    let metadata: Value = de::from_slice(&data).map_err(|err| {
+    let metadata = bincode::deserialize::<Message>(&data).map_err(|err| {
         ProtocolError::StorageParseError(format!("Unable to parse metadata for {}: {}", hash, err))
     })?;
+    // let metadata: Value = de::from_slice(&data).map_err(|err| {
+    //     ProtocolError::StorageParseError(format!("Unable to parse metadata for {}: {}", hash, err))
+    // })?;
 
-    // Returned data should be CBOR: '[["num_chunks", value]]'
-    let num_chunks: u32 = from_value::<Vec<Value>>(metadata)
-        .and_then(|data| from_value::<Vec<Value>>(data[0].clone()))
-        .and_then(|data| {
-            let mut entries = data.iter();
+    // // Returned data should be CBOR: '[["num_chunks", value]]'
+    // let num_chunks: u32 = from_value::<Vec<Value>>(metadata)
+    //     .and_then(|data| from_value::<Vec<Value>>(data[0].clone()))
+    //     .and_then(|data| {
+    //         let mut entries = data.iter();
 
-            Ok(entries
-                .next()
-                .and_then(|val| Some(from_value::<String>(val.clone()).unwrap()))
-                .and_then(|key| {
-                    if key == "num_chunks" {
-                        entries.next().and_then(|val| Some(from_value::<u32>(val.clone()).unwrap()))
-                    } else {
-                        None
-                    }
-                }))
-        })?.unwrap();
+    //         Ok(entries
+    //             .next()
+    //             .and_then(|val| Some(from_value::<String>(val.clone()).unwrap()))
+    //             .and_then(|key| {
+    //                 if key == "num_chunks" {
+    //                     entries.next().and_then(|val| Some(from_value::<u32>(val.clone()).unwrap()))
+    //                 } else {
+    //                     None
+    //                 }
+    //             }))
+    //     })?.unwrap();
         // .ok_or_else(|| {
         //     ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())
         // })?;
+    let num_chunks = match metadata {
+        Message::Metadata { num_chunks, .. } => num_chunks,
+        _ => return Err(ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())),
+    };
 
     Ok(num_chunks as u32)
 }
@@ -263,7 +269,7 @@ pub fn initialize_file(
     source_path: &str,
     transfer_chunk_size: usize,
     hash_chunk_size: usize,
-) -> Result<(String, u32, u32), ProtocolError> {
+) -> Result<(String, String, u32, u32), ProtocolError> {
     let storage_path = format!("{}/storage", prefix);
 
     // Confirm file exists
@@ -318,11 +324,37 @@ pub fn initialize_file(
         Err(e) => warn!("Failed to remove temp file {:?} : {}", temp_path, e),
     }
 
+    let path = Path::new(&source_path);
+    let file_name = path.file_name().unwrap().to_str().unwrap().to_owned();
+
     if let Ok(meta) = fs::metadata(source_path) {
-        Ok((hash, index, meta.mode()))
+        Ok((file_name, hash, index, meta.mode()))
     } else {
-        Ok((hash, index, 0o644))
+        Ok((file_name, hash, index, 0o644))
     }
+}
+
+pub fn initialize_directory(
+    prefix: &str,
+    source_dir: &str,
+    transfer_chunk_size: usize,
+    hash_chunk_size: usize,
+) -> Result<Vec<(String, String, u32, u32)>, ProtocolError> {
+    let mut results = Vec::new();
+    for entry in fs::read_dir(source_dir).map_err(|err| ProtocolError::StorageError {action: "read directory".to_owned(), err})? {
+        let entry = entry.map_err(|err| ProtocolError::StorageError{action: "read directory entry".to_owned(), err})?;
+        let path = entry.path();
+        if path.is_file() {
+            let result = initialize_file(
+                prefix,
+                path.to_str().unwrap(),
+                transfer_chunk_size,
+                hash_chunk_size,
+            )?;
+            results.push(result);
+        }
+    }
+    Ok(results)
 }
 
 // Export received chunks into final file and verify correct file hash

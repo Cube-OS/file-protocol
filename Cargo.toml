@@ -5,13 +5,11 @@ authors = ["Ryan Plauche <ryan@kubos.co>", "Patrick Oppel <patrick.oppel94@gmail
 edition = "2018"
 
 [dependencies]
-serde_cbor = "0.10.2"
 simplelog = "^0.5.0"
 log = { version = "^0.4.0", default-features = false }
 time = "0.1"
 blake2-rfc = "0.2.18"
-serde = { version = "1.0", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+bincode = { git = "ssh://github.com/Cube-OS/bincode" }
 rand = "0.5"
-# cbor-protocol = { git = "ssh://git@github.com/Cube-OS/cbor-protocol.git"}  
-cbor-protocol = { path = "../cbor-protocol" }
 failure = "0.1.8"
