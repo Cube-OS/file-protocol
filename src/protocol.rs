@@ -26,8 +26,8 @@ use super::Message;
 use crate::error::ProtocolError;
 use log::{error, info, warn};
 use rand::{self, Rng};
-use std::cell::Cell;
-use std::net::{UdpSocket,SocketAddr};
+
+use std::net::{UdpSocket};
 use std::str;
 use std::thread;
 use std::time::Duration;
@@ -710,18 +710,18 @@ impl Protocol {
         let parsed_message = bincode::deserialize::<Message>(message)?;
         let new_state;
         match parsed_message {
-            Message::Sync{channel_id, hash} => {
+            Message::Sync{channel_id: _, hash: _} => {
                 // info!("<- {{ {}, {} }}", channel_id, hash);
                 new_state = state.clone();
             }
-            Message::Metadata{channel_id, hash, num_chunks} => {
+            Message::Metadata{channel_id: _, hash, num_chunks} => {
                 // info!("<- {{ {}, {}, {} }}", channel_id, hash, num_chunks);
                 storage::store_meta(&self.config.storage_prefix, &hash, num_chunks)?;
                 new_state = State::StartReceive {
                     path: hash.to_owned(),
                 };
             }
-            Message::ReceiveChunk{channel_id, hash, chunk_num, data} => {
+            Message::ReceiveChunk{channel_id: _, hash, chunk_num, data} => {
                 // info!(
                 //     "<- {{ {}, {}, {}, chunk_data }}",
                 //     channel_id, hash, chunk_num
@@ -734,7 +734,7 @@ impl Protocol {
                 )?;
                 new_state = state.clone();
             }
-            Message::ACK{channel_id: _, hash} => {
+            Message::ACK{channel_id: _, hash: _} => {
                 // info!("<- {{ {}, true }}", hash);
                 // TODO: Figure out hash verification here
                 let (transmitted, total) = match state {
@@ -880,7 +880,7 @@ impl Protocol {
                     }
                 }                        
             }
-            Message::SuccessReceive{channel_id, hash} => {
+            Message::SuccessReceive{channel_id: _, hash} => {
                 // info!("<- {{ {}, true }}", channel_id);
                 new_state = State::Done;
                 storage::delete_file(&self.config.storage_prefix, &hash)?;
@@ -943,7 +943,7 @@ impl Protocol {
                     error_message: error.to_string(),
                 });
             }
-            Message::Cleanup{channel_id, hash} => {
+            Message::Cleanup{channel_id: _, hash} => {
                 // info!("<- {{ {}, cleanup, {:?} }}", channel_id, hash);
                 if hash.is_some() {
                     storage::delete_file(&self.config.storage_prefix, hash.as_ref().unwrap())?;
@@ -1021,7 +1021,8 @@ fn send_chunks_threaded(
                 let inter_chunk_delay = protocol.config.inter_chunk_delay.clone();
                 let remote_addr = protocol.remote_addr.clone();
                 let thread = thread::spawn(move || {
-                    send_chunks(&storage_prefix, max_chunks_transmit, inter_chunk_delay, remote_addr, channel_id, &hash_clone, &chunk_range);
+                    send_chunks(&storage_prefix, max_chunks_transmit, inter_chunk_delay, remote_addr, channel_id, &hash_clone, &chunk_range)?;
+                    Ok(())
                 });
 
                 threads.push(thread);
@@ -1029,12 +1030,12 @@ fn send_chunks_threaded(
             }
         } else {
             let chunk_range = [(*first, *last)];
-            let channel_id_clone = channel_id;
+            let _channel_id_clone = channel_id;
             let hash_clone = hash.to_string();
             let storage_prefix = protocol.config.storage_prefix.clone();
             let max_chunks_transmit = protocol.config.max_chunks_transmit.clone();
             let inter_chunk_delay = protocol.config.inter_chunk_delay.clone();
-            send_chunks(&storage_prefix, max_chunks_transmit, inter_chunk_delay, protocol.remote_addr.clone(), channel_id, &hash_clone, &chunk_range);
+            send_chunks(&storage_prefix, max_chunks_transmit, inter_chunk_delay, protocol.remote_addr.clone(), channel_id, &hash_clone, &chunk_range)?;
         }
 
         if let Some(max_chunks_transmit) = protocol.config.max_chunks_transmit {
@@ -1048,7 +1049,8 @@ fn send_chunks_threaded(
     }
 
     for thread in threads {
-        thread.join().unwrap();
+        let thread_result: Result<(), ProtocolError> = thread.join().unwrap();
+        thread_result?;
     }
 
     Ok(())

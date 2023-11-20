@@ -32,7 +32,7 @@ use std::str;
 use std::thread;
 use std::time::Duration;
 use time;
-use crate::Message;
+
 
 const HASH_SIZE: usize = 16;
 
