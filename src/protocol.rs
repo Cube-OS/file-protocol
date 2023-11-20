@@ -75,8 +75,9 @@ impl ProtocolConfig {
 /// File protocol information structure
 pub struct Protocol {
     host: UdpSocket,
-    remote_addr: Cell<SocketAddr>,
-    config: ProtocolConfig,    
+    remote_addr: String,
+    config: ProtocolConfig,
+    num_threads: u8,
 }
 
 /// Current state of the file protocol transaction
@@ -151,7 +152,7 @@ impl Protocol {
     /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "192.168.0.1:7000", config);
     /// ```
     ///
-    pub fn new(host_addr: &str, remote_addr: &str, config: ProtocolConfig) -> Self {      
+    pub fn new(host_addr: &str, remote_addr: &str, config: ProtocolConfig, num_threads: u8) -> Self {      
         // Set up the full connection info
         Protocol {
             host: UdpSocket::bind(host_addr).map_err(
@@ -160,16 +161,9 @@ impl Protocol {
                     err
                 },
                 ).unwrap(),                   
-            remote_addr: Cell::new(
-                remote_addr
-                    .parse::<SocketAddr>()
-                    .map_err(|err| {
-                        error!("Failed to parse remote_addr: {:?}", err);
-                        err
-                    })
-                    .unwrap(),
-            ),
+            remote_addr: remote_addr.to_string(),
             config,
+            num_threads,
         }
     }
 
@@ -199,7 +193,7 @@ impl Protocol {
     pub fn send(&self, message: Message) -> Result<(), ProtocolError> {
         match self.host.send_to(
             &bincode::serialize(&message)?, 
-            self.remote_addr.get(),
+            self.remote_addr.clone(),
         ) {
             Ok(_) => Ok(()),
             Err(err) => Err(ProtocolError::SendError {
@@ -519,44 +513,7 @@ impl Protocol {
     /// * channel_id - ID of channel to communicate over
     /// * hash - Hash of file corresponding to chunks
     /// * chunks - List of chunk ranges to transmit
-    fn send_chunks(
-        &self,
-        channel_id: u32,
-        hash: &str,
-        chunks: &[(u32, u32)],
-    ) -> Result<(), ProtocolError> {
-        let mut chunks_transmitted = 0;
-        for (first, last) in chunks {
-            for chunk_index in *first..*last {
-                match storage::load_chunk(&self.config.storage_prefix, hash, chunk_index) {
-                    Ok(c) => {
-                        let message = Message::ReceiveChunk{
-                            channel_id,
-                            hash: hash.to_string(),
-                            chunk_num: chunk_index,
-                            data: c,
-                        };
-                        self.send(message)?;
-                    },
-                    Err(e) => {
-                        warn!("Failed to load chunk {}:{} : {}", hash, chunk_index, e);
-                        storage::delete_file(&self.config.storage_prefix, hash)?;
-                        return Err(ProtocolError::CorruptFile(hash.to_string()));
-                    }
-                };
-                if let Some(max_chunks_transmit) = self.config.max_chunks_transmit {
-                    chunks_transmitted += 1;
-                    if chunks_transmitted >= max_chunks_transmit {
-                        return Ok(());
-                    }
-                }
-
-                thread::sleep(self.config.inter_chunk_delay);
-            }
-        }
-        Ok(())
-    }
-
+    
     /// Listen for and process file protocol messages
     ///
     /// # Arguments
@@ -808,7 +765,7 @@ impl Protocol {
                         remaining_chunks.push((first, last));
                     }
                     // info!("Send chunks: {:?}", remaining_chunks);
-                    match self.send_chunks(channel_id, &hash, &remaining_chunks) {
+                    match send_chunks_threaded(self, channel_id, &hash, &remaining_chunks) {
                         Ok(()) => {}
                         Err(error) => self.send(Message::Failure{
                             channel_id,
@@ -997,5 +954,124 @@ impl Protocol {
             }
         }
         Ok(new_state)
+    }
+}
+
+fn send_chunks(
+    storage_prefix: &str,
+    max_chunks_transmit: Option<u32>,
+    inter_chunk_delay: Duration,
+    remote_addr: String,
+    channel_id: u32,
+    hash: &str,
+    chunks: &[(u32, u32)],
+) -> Result<(), ProtocolError> {
+    let mut chunks_transmitted = 0;
+    for (first, last) in chunks {
+        for chunk_index in *first..*last {
+            match storage::load_chunk(&storage_prefix, hash, chunk_index) {
+                Ok(c) => {
+                    let message = Message::ReceiveChunk{
+                        channel_id,
+                        hash: hash.to_string(),
+                        chunk_num: chunk_index,
+                        data: c,
+                    };
+                    send_threaded(message, remote_addr.clone())?;
+                },
+                Err(e) => {
+                    warn!("Failed to load chunk {}:{} : {}", hash, chunk_index, e);
+                    storage::delete_file(&storage_prefix, hash)?;
+                    return Err(ProtocolError::CorruptFile(hash.to_string()));
+                }
+            };
+            if let Some(max_chunks_transmit) = max_chunks_transmit {
+                chunks_transmitted += 1;
+                if chunks_transmitted >= max_chunks_transmit {
+                    return Ok(());
+                }
+            }
+
+            thread::sleep(inter_chunk_delay);
+        }
+    }
+    Ok(())
+}
+
+fn send_chunks_threaded(
+    protocol: &Protocol,
+    channel_id: u32,
+    hash: &str,
+    chunks: &[(u32, u32)],
+) -> Result<(), ProtocolError> {
+    let num_threads = protocol.num_threads as u32;
+    let mut threads = vec![];
+    let mut chunks_transmitted = 0;
+    for (first, last) in chunks {
+        if last - first > 100 {
+            let rest = (last - first) % num_threads;
+            let chunk_size = (last - first) / num_threads;
+            let mut start = *first;         
+            for i in 0..num_threads {
+                let end = start + chunk_size + if i < rest { 1 } else { 0 };
+                let chunk_range = [(start, end)];
+                let hash_clone = hash.to_string();
+                let storage_prefix = protocol.config.storage_prefix.clone();
+                let max_chunks_transmit = protocol.config.max_chunks_transmit.clone();
+                let inter_chunk_delay = protocol.config.inter_chunk_delay.clone();
+                let remote_addr = protocol.remote_addr.clone();
+                let thread = thread::spawn(move || {
+                    send_chunks(&storage_prefix, max_chunks_transmit, inter_chunk_delay, remote_addr, channel_id, &hash_clone, &chunk_range);
+                });
+
+                threads.push(thread);
+                start = end;
+            }
+        } else {
+            let chunk_range = [(*first, *last)];
+            let channel_id_clone = channel_id;
+            let hash_clone = hash.to_string();
+            let storage_prefix = protocol.config.storage_prefix.clone();
+            let max_chunks_transmit = protocol.config.max_chunks_transmit.clone();
+            let inter_chunk_delay = protocol.config.inter_chunk_delay.clone();
+            send_chunks(&storage_prefix, max_chunks_transmit, inter_chunk_delay, protocol.remote_addr.clone(), channel_id, &hash_clone, &chunk_range);
+        }
+
+        if let Some(max_chunks_transmit) = protocol.config.max_chunks_transmit {
+            chunks_transmitted += 1;
+            if chunks_transmitted >= max_chunks_transmit {
+                break;
+            }
+        }
+
+        thread::sleep(protocol.config.inter_chunk_delay);
+    }
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    Ok(())
+}
+
+fn send_threaded(
+    message: Message,
+    target: String,
+) -> Result<(), ProtocolError> {   
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(
+        |err| {
+            error!("Failed to bind to host_addr: {:?}", err);
+            err
+        },
+    ).unwrap();
+
+    match socket.send_to(
+        &bincode::serialize(&message)?, 
+        target,
+    ) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(ProtocolError::SendError {
+            err: format!("{}", err),
+        }),
     }
 }
