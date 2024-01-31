@@ -24,7 +24,7 @@
 use super::storage;
 use super::Message;
 use crate::error::ProtocolError;
-use log::{error, info, warn};
+use log::{error, info, warn, debug};
 use rand::{self, Rng};
 
 use std::net::{UdpSocket};
@@ -191,6 +191,7 @@ impl Protocol {
     /// ```
     ///
     pub fn send(&self, message: Message) -> Result<(), ProtocolError> {
+        debug!("-> {{ {:?} }}", message);
         match self.host.send_to(
             &bincode::serialize(&message)?, 
             self.remote_addr.clone(),
@@ -312,10 +313,6 @@ impl Protocol {
         hash: &str,
         num_chunks: u32,
     ) -> Result<(), ProtocolError> {
-        info!("-> {{ {:?} }}", Message::Metadata{
-            channel_id,
-            hash: hash.to_owned(),
-            num_chunks,});
         Ok(self.send(Message::Metadata{
             channel_id,
             hash: hash.to_owned(),
@@ -365,12 +362,6 @@ impl Protocol {
         target_path: &str,
         mode: u32,
     ) -> Result<(), ProtocolError> {
-        info!("-> {{ {:?} }}", Message::ReqReceive {
-            channel_id,
-            hash: hash.to_owned(),
-            path: target_path.to_owned(),
-            mode: Some(mode),
-        });
         self.send(Message::ReqReceive {
             channel_id,
             hash: hash.to_owned(),
@@ -404,10 +395,6 @@ impl Protocol {
     /// ```
     ///
     pub fn send_import(&self, channel_id: u32) -> Result<(), ProtocolError> {
-        info!("-> {{ {:?} }}", Message::ReqTransmit {
-            channel_id,
-            path: None,
-        });
         Ok(self.send(Message::ReqTransmit {
             channel_id,
             path: None,
@@ -415,10 +402,6 @@ impl Protocol {
     }
 
     pub fn send_import_file(&self, channel_id: u32, source_path: &str) -> Result<(), ProtocolError> {
-        info!("-> {{ {:?} }}", Message::ReqTransmit {
-            channel_id,
-            path: Some(source_path.to_string()),
-        });
         Ok(self.send(Message::ReqTransmit {
             channel_id,
             path: Some(source_path.to_string()),
@@ -513,6 +496,42 @@ impl Protocol {
     /// * channel_id - ID of channel to communicate over
     /// * hash - Hash of file corresponding to chunks
     /// * chunks - List of chunk ranges to transmit
+    fn send_chunks(
+        &self,
+        channel_id: u32,
+        hash: &str,
+        chunks: &[(u32, u32)],
+    ) -> Result<(), ProtocolError> {
+        let mut chunks_transmitted = 0;
+        for (first, last) in chunks {
+            for chunk_index in *first..*last {
+                match storage::load_chunk(&self.config.storage_prefix, hash, chunk_index) {
+                    Ok(c) => {
+                        let message = Message::ReceiveChunk{
+                            channel_id,
+                            hash: hash.to_string(),
+                            chunk_num: chunk_index,
+                            data: c,
+                        };
+                        self.send(message)?;
+                    },
+                    Err(e) => {
+                        warn!("Failed to load chunk {}:{} : {}", hash, chunk_index, e);
+                        storage::delete_file(&self.config.storage_prefix, hash)?;
+                        return Err(ProtocolError::CorruptFile(hash.to_string()));
+                    }
+                };
+                if let Some(max_chunks_transmit) = self.config.max_chunks_transmit {
+                    chunks_transmitted += 1;
+                    if chunks_transmitted >= max_chunks_transmit {
+                        return Ok(());
+                    }
+                }
+                thread::sleep(self.config.inter_chunk_delay);
+            }
+        }
+        Ok(())
+    }
     
     /// Listen for and process file protocol messages
     ///
@@ -708,6 +727,7 @@ impl Protocol {
     ///
     pub fn process_message(&self, message: &[u8], state: &State) -> Result<State, ProtocolError> {
         let parsed_message = bincode::deserialize::<Message>(message)?;
+        debug!("<- {{ {:?} }}", parsed_message);
         let new_state;
         match parsed_message {
             Message::Sync{channel_id: _, hash: _} => {
@@ -1008,7 +1028,7 @@ fn send_chunks_threaded(
     let mut threads = vec![];
     let mut chunks_transmitted = 0;
     for (first, last) in chunks {
-        if last - first > 100 {
+        if last - first > 100 && num_threads > 1 {
             let rest = (last - first) % num_threads;
             let chunk_size = (last - first) / num_threads;
             let mut start = *first;         
@@ -1035,7 +1055,8 @@ fn send_chunks_threaded(
             let storage_prefix = protocol.config.storage_prefix.clone();
             let max_chunks_transmit = protocol.config.max_chunks_transmit.clone();
             let inter_chunk_delay = protocol.config.inter_chunk_delay.clone();
-            send_chunks(&storage_prefix, max_chunks_transmit, inter_chunk_delay, protocol.remote_addr.clone(), channel_id, &hash_clone, &chunk_range)?;
+
+            protocol.send_chunks(channel_id, &hash_clone, &chunk_range)?;
         }
 
         if let Some(max_chunks_transmit) = protocol.config.max_chunks_transmit {
