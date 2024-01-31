@@ -18,9 +18,7 @@
 // - Rebranding Cube-OS
 // - add feature client to display chunck progress
 
-use cbor_protocol;
 use failure::Fail;
-use serde_cbor;
 use std::io;
 
 /// Errors which occur when using FileProtocol
@@ -29,12 +27,6 @@ pub enum ProtocolError {
     /// A file in storage was corrupt
     #[fail(display = "File was corrupt: {}", _0)]
     CorruptFile(String),
-    /// An error was encountered by the cbor protocol
-    #[fail(display = "Cbor Error: {}", err)]
-    CborError {
-        /// The specific cbor protocol error
-        err: cbor_protocol::ProtocolError,
-    },
     /// An error was encountered when finalizing the file
     #[fail(display = "Failed to finalize file: {}", cause)]
     FinalizeError {
@@ -47,14 +39,6 @@ pub enum ProtocolError {
     /// An invalid value was found when parsing a message
     #[fail(display = "Unable to parse {} message: Invalid {} param", _0, _1)]
     InvalidParam(String, String),
-    /// An error was encountered when creating a message
-    #[fail(display = "Failed to create {} message: {}", message, err)]
-    MessageCreationError {
-        /// The message which failed creation
-        message: String,
-        /// The underlying serde error encountered
-        err: serde_cbor::error::Error,
-    },
     /// A general error was encountered when parsing a message
     #[fail(display = "Unable to parse message: {}", err)]
     MessageParseError {
@@ -70,11 +54,17 @@ pub enum ProtocolError {
         /// Underlying error encountered
         err: String,
     },
+    /// An error was encounter when sending a message
+    #[fail(display = "Failure sending message: {}", err)]
+    SendError {
+        /// Underlying error encountered
+        err: String,
+    },
     /// An error was encountered when serializing data
     #[fail(display = "Failed to serialize: {}", err)]
     Serialize {
         /// Underlying serde error
-        err: serde_cbor::error::Error,
+        err: bincode::Error,
     },
     /// An error was encountered when writing to or reading from file storage
     #[fail(display = "Storage failed to {}: {}", action, err)]
@@ -103,17 +93,8 @@ pub enum ProtocolError {
     },
 }
 
-impl From<cbor_protocol::ProtocolError> for ProtocolError {
-    fn from(error: cbor_protocol::ProtocolError) -> Self {
-        match error {
-            cbor_protocol::ProtocolError::Timeout => ProtocolError::ReceiveTimeout,
-            err => ProtocolError::CborError { err },
-        }
-    }
-}
-
-impl From<serde_cbor::error::Error> for ProtocolError {
-    fn from(error: serde_cbor::error::Error) -> Self {
-        ProtocolError::Serialize { err: error }
+impl From<bincode::Error> for ProtocolError {
+    fn from(b: bincode::Error) -> ProtocolError {
+        ProtocolError::Serialize { err: b }
     }
 }
