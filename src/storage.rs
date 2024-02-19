@@ -305,36 +305,36 @@ pub fn initialize_file(
     }
 }
 
-pub fn initialize_directory(
-    prefix: &str,
-    source_dir: &str,
-    transfer_chunk_size: usize,
-    hash_chunk_size: usize,
-) -> Result<Vec<(String, String, u32, u32)>, ProtocolError> {
-    let mut results = Vec::new();
-    for entry in fs::read_dir(source_dir).map_err(|err| ProtocolError::StorageError {action: "read directory".to_owned(), err})? {
-        let entry = entry.map_err(|err| ProtocolError::StorageError{action: "read directory entry".to_owned(), err})?;
-        let path = entry.path();
-        if path.is_file() {
-            let result = initialize_file(
-                prefix,
-                path.to_str().unwrap(),
-                transfer_chunk_size,
-                hash_chunk_size,
-            )?;
-            results.push(result);
-        } else if path.is_dir() {
-            let result = initialize_directory(
-                prefix,
-                path.to_str().unwrap(),
-                transfer_chunk_size,
-                hash_chunk_size,
-            )?;
-            results.extend(result);
-        }
-    }
-    Ok(results)
-}
+// pub fn initialize_directory(
+//     prefix: &str,
+//     source_dir: &str,
+//     transfer_chunk_size: usize,
+//     hash_chunk_size: usize,
+// ) -> Result<Vec<(String, String, u32, u32)>, ProtocolError> {
+//     let mut results = Vec::new();
+//     for entry in fs::read_dir(source_dir).map_err(|err| ProtocolError::StorageError {action: "read directory".to_owned(), err})? {
+//         let entry = entry.map_err(|err| ProtocolError::StorageError{action: "read directory entry".to_owned(), err})?;
+//         let path = entry.path();
+//         if path.is_file() {
+//             let result = initialize_file(
+//                 prefix,
+//                 path.to_str().unwrap(),
+//                 transfer_chunk_size,
+//                 hash_chunk_size,
+//             )?;
+//             results.push(result);
+//         } else if path.is_dir() {
+//             let result = initialize_directory(
+//                 prefix,
+//                 path.to_str().unwrap(),
+//                 transfer_chunk_size,
+//                 hash_chunk_size,
+//             )?;
+//             results.extend(result);
+//         }
+//     }
+//     Ok(results)
+// }
 
 // Export received chunks into final file and verify correct file hash
 pub fn finalize_file(

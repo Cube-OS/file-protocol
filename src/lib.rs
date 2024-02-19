@@ -93,7 +93,7 @@
 mod error;
 mod parsers;
 pub mod protocol;
-mod storage;
+pub mod storage;
 
 pub use crate::error::ProtocolError;
 pub use crate::protocol::Protocol as FileProtocol;
