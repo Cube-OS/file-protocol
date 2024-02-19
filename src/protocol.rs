@@ -840,33 +840,73 @@ impl Protocol {
                 // info!("<- {{ {}, import }}", channel_id);
                 // Set up the requested file for transmission
                 if path.is_some() {
-                    match self.initialize_file(path.as_ref().unwrap()) {
-                        Ok((_file_name, hash, num_chunks, mode)) => {
-                            self.send(Message::SuccessTransmit{
-                                channel_id,
-                                file_name: path.as_ref().unwrap().to_string(),
-                                hash: hash.to_string(),
-                                num_chunks,
-                                mode: Some(mode),
-                                last: true,
-                            })?;
-                            
-                            new_state = State::Transmitting{                                        
-                                transmitted_files: 0,
-                                total_files: 1,
-                            };
+                    if path.as_ref().unwrap().is_file() {
+                        match self.initialize_file(path.as_ref().unwrap()) {
+                            Ok((_file_name, hash, num_chunks, mode)) => {
+                                self.send(Message::SuccessTransmit{
+                                    channel_id,
+                                    file_name: path.as_ref().unwrap().to_string(),
+                                    hash: hash.to_string(),
+                                    num_chunks,
+                                    mode: Some(mode),
+                                    last: true,
+                                })?;
+                                
+                                new_state = State::Transmitting{                                        
+                                    transmitted_files: 0,
+                                    total_files: 1,
+                                };
+                            }
+                            Err(error) => {
+                                // It failed. Let the requester know that we can't transmit
+                                // the file they want.
+                                self.send(Message::Failure{
+                                    channel_id,
+                                    error: error.to_string(),
+                                })?;
+                        
+                                new_state = State::Done;
+                            }
                         }
-                        Err(error) => {
-                            // It failed. Let the requester know that we can't transmit
-                            // the file they want.
-                            self.send(Message::Failure{
-                                channel_id,
-                                error: error.to_string(),
-                            })?;
-                    
-                            new_state = State::Done;
+                    } else if path.as_ref().unwrap().is_dir() {
+                        let directory = path.as_ref().unwrap().to_str().unwrap().to_string();
+                        match self.initialize_directory(directory) {
+                            Ok(results) => {
+                                let mut results_iter = results.clone().into_iter().peekable();
+                                while let Some((file_name,hash,num_chunks,mode)) = results_iter.next() {                                        
+                                    self.send(Message::SuccessTransmit{
+                                        channel_id,
+                                        file_name: file_name.to_string(),
+                                        hash: hash.to_string(),
+                                        num_chunks,
+                                        mode: Some(mode),
+                                        last: results_iter.peek().is_none(),
+                                    })?;                                 
+                                }
+                                new_state = State::Transmitting{
+                                    transmitted_files: 0,
+                                    total_files: results.len(),
+                                };
+                            }
+                            Err(error) => {
+                                // It failed. Let the requester know that we can't transmit
+                                // the file they want.
+                                self.send(Message::Failure{
+                                    channel_id,
+                                    error: error.to_string(),
+                                })?;
+                        
+                                new_state = State::Done;
+                            }
                         }
-                    }
+                    } else {
+                        let error = format!("{} is not a file or directory", path.as_ref().unwrap().to_str().unwrap());
+                        self.send(Message::Failure{
+                            channel_id,
+                            error: error.to_string(),
+                        })?;
+                        new_state = State::Done;
+                    }          
                 } else {
                     let directory = "/home/kubos/download/".to_string();
                     match self.initialize_directory(directory) {

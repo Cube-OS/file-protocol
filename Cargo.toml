@@ -10,6 +10,6 @@ log = { version = "^0.4.0", default-features = false }
 time = "0.1"
 blake2-rfc = "0.2.18"
 serde = { version = "1.0", features = ["derive"] }
-bincode = { git = "ssh://github.com/Cube-OS/bincode" }
+bincode = { git = "ssh://git@github.com/Cube-OS/bincode" }
 rand = "0.5"
 failure = "0.1.8"

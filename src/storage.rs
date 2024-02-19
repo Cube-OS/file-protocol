@@ -323,6 +323,14 @@ pub fn initialize_directory(
                 hash_chunk_size,
             )?;
             results.push(result);
+        } else if path.is_dir() {
+            let result = initialize_directory(
+                prefix,
+                path.to_str().unwrap(),
+                transfer_chunk_size,
+                hash_chunk_size,
+            )?;
+            results.extend(result);
         }
     }
     Ok(results)
