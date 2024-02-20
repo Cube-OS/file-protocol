@@ -23,7 +23,7 @@ use crate::error::ProtocolError;
 pub fn parse_channel_id(message: &[u8]) -> Result<u32, ProtocolError> {
     
     // Deserialize the first parameter into a Message
-    let message: Message = bincode::deserialize::<Message>(message.clone())
+    let message: Message = bincode::deserialize::<Message>(message)
         .map_err(|_| ProtocolError::MessageParseError {
             err: "Failed to deserialize Message".to_owned(),
         })?;

@@ -149,7 +149,7 @@ impl Protocol {
     /// use file_protocol::*;
     ///
     /// let config = FileProtocolConfig::new(Some("my/file/storage".to_owned()), 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "192.168.0.1:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "192.168.0.1:7000", config, 5);
     /// ```
     ///
     pub fn new(host_addr: &str, remote_addr: &str, config: ProtocolConfig, num_threads: u8) -> Self {      
@@ -167,11 +167,11 @@ impl Protocol {
         }
     }
 
-    /// Send CBOR packet to the destination port
+    /// Send message packet to the destination port
     ///
     /// # Arguments
     ///
-    /// * vec - CBOR packet to send
+    /// * message - file protocol message to send
     ///
     /// # Errors
     ///
@@ -181,13 +181,12 @@ impl Protocol {
     ///
     /// ```no_run
     /// use file_protocol::*;
-    /// use serde_cbor::ser;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
-    /// let message = ser::to_vec_packed(&"ping").unwrap();
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
+    /// let message = Message::Sync { channel_id: 1, hash: String::from("deadbeef") };
     ///
-    /// f_protocol.send(&message);
+    /// f_protocol.send(message).ok();
     /// ```
     ///
     pub fn send(&self, message: Message) -> Result<(), ProtocolError> {
@@ -222,7 +221,7 @@ impl Protocol {
     /// use std::time::Duration;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     ///
     /// let message = match f_protocol.recv(Some(Duration::from_secs(1))) {
     ///     Ok(data) => data,
@@ -269,7 +268,7 @@ impl Protocol {
     /// use file_protocol::*;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     ///
     /// let channel_id = f_protocol.generate_channel();
     /// ```
@@ -298,11 +297,11 @@ impl Protocol {
     /// use file_protocol::*;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     ///
     /// # ::std::fs::File::create("client.txt").unwrap();
     ///
-    /// let (hash, num_chunks, _mode) = f_protocol.initialize_file("client.txt").unwrap();
+    /// let (_filename, hash, num_chunks, _mode) = f_protocol.initialize_file("client.txt").unwrap();
     /// let channel_id = f_protocol.generate_channel().unwrap();
     /// f_protocol.send_metadata(channel_id, &hash, num_chunks);
     /// ```
@@ -346,11 +345,11 @@ impl Protocol {
     /// use file_protocol::*;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     ///
     /// # ::std::fs::File::create("client.txt").unwrap();
     ///
-    /// let (hash, _num_chunks, mode) = f_protocol.initialize_file("client.txt").unwrap();
+    /// let (_filename, hash, _num_chunks, mode) = f_protocol.initialize_file("client.txt").unwrap();
     /// let channel_id = f_protocol.generate_channel().unwrap();
     /// f_protocol.send_export(channel_id, &hash, "final/dir/service.txt", mode);
     /// ```
@@ -388,10 +387,10 @@ impl Protocol {
     /// use file_protocol::*;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     /// let channel_id = f_protocol.generate_channel().unwrap();
     ///
-    /// f_protocol.send_import(channel_id, "service.txt");
+    /// f_protocol.send_import(channel_id).ok();
     /// ```
     ///
     pub fn send_import(&self, channel_id: u32) -> Result<(), ProtocolError> {
@@ -426,11 +425,11 @@ impl Protocol {
     /// use file_protocol::*;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     ///
     /// # ::std::fs::File::create("client.txt").unwrap();
     ///
-    /// let (_hash, _num_chunks, _mode) = f_protocol.initialize_file("client.txt").unwrap();
+    /// let (_filename, _hash, _num_chunks, _mode) = f_protocol.initialize_file("client.txt").unwrap();
     /// ```
     ///
     pub fn initialize_file(&self, source_path: &str) -> Result<(String, String, u32, u32), ProtocolError> {
@@ -552,13 +551,13 @@ impl Protocol {
     /// use std::time::Duration;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     ///
     /// f_protocol.message_engine(
     ///     |d| f_protocol.recv(Some(d)),
     ///     Duration::from_millis(10),
-    ///     &State::Transmitting
-    /// );
+    ///     &State::Transmitting { transmitted_files: 0, total_files: 0 }
+    /// ).ok();
     /// ```
     ///
     pub fn message_engine<F>(
@@ -713,11 +712,11 @@ impl Protocol {
     /// use std::time::Duration;
     ///
     /// let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config);
+    /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "0.0.0.0:7000", config, 5);
     ///
     /// if let Ok(message) = f_protocol.recv(Some(Duration::from_millis(100))) {
     /// 	let _state = f_protocol.process_message(
-    ///			message,
+    ///			message.as_slice(),
     ///			&State::StartReceive {
     ///				path: "target/dir/file.bin".to_owned()
     ///         }
@@ -1050,12 +1049,7 @@ fn send_chunks_threaded(
             }
         } else {
             let chunk_range = [(*first, *last)];
-            let _channel_id_clone = channel_id;
             let hash_clone = hash.to_string();
-            let storage_prefix = protocol.config.storage_prefix.clone();
-            let max_chunks_transmit = protocol.config.max_chunks_transmit.clone();
-            let inter_chunk_delay = protocol.config.inter_chunk_delay.clone();
-
             protocol.send_chunks(channel_id, &hash_clone, &chunk_range)?;
         }
 
