@@ -28,14 +28,14 @@
 //!
 //! fn upload() -> Result<(), ProtocolError> {
 //!     let config = FileProtocolConfig::new(Some("storage/dir".to_owned()), 1024, 5, 1, None, 2048);
-//!     let f_protocol = FileProtocol::new("0.0.0.0", "0.0.0.0:7000", config);
+//!     let f_protocol = FileProtocol::new("0.0.0.0", "0.0.0.0:7000", config, 5);
 //!
 //!     # ::std::fs::File::create("client.txt").unwrap();
 //!     let source_path = "client.txt";
 //!     let target_path = "service.txt";
 //!
 //!     // Copy file to upload to temp storage. Calculate the hash and chunk info
-//!     let (hash, num_chunks, mode) = f_protocol.initialize_file(&source_path)?;
+//!     let (_filename, hash, num_chunks, mode) = f_protocol.initialize_file(&source_path)?;
 //!
 //!     // Generate channel id
 //!     let channel_id = f_protocol.generate_channel()?;
@@ -47,7 +47,10 @@
 //!     f_protocol.send_export(channel_id, &hash, &target_path, mode)?;
 //!
 //!     // Start the engine to send the file data chunks
-//!     Ok(f_protocol.message_engine(|d| f_protocol.recv(Some(d)), Duration::from_millis(10), &State::Transmitting)?)
+//!     Ok(f_protocol.message_engine(
+//!         |d| f_protocol.recv(Some(d)),
+//!         Duration::from_millis(10),
+//!         &State::Transmitting { transmitted_files: 0, total_files: 0 })?)
 //! }
 //! ```
 //!
@@ -59,7 +62,7 @@
 //!
 //! fn download() -> Result<(), ProtocolError> {
 //!     let config = FileProtocolConfig::new(None, 1024, 5, 1, None, 2048);
-//!     let f_protocol = FileProtocol::new("0.0.0.0", "0.0.0.0:7000", config);
+//!     let f_protocol = FileProtocol::new("0.0.0.0", "0.0.0.0:7000", config, 5);
 //!
 //!     let channel_id = f_protocol.generate_channel()?;
 //!     # ::std::fs::File::create("service.txt").unwrap();
@@ -68,7 +71,7 @@
 //!
 //!     // Send our file request to the remote addr and verify that it's
 //!     // going to be able to send it
-//!     f_protocol.send_import(channel_id, source_path)?;
+//!     f_protocol.send_import(channel_id)?;
 //!
 //!     // Wait for the request reply
 //!     let reply = match f_protocol.recv(None) {
@@ -77,7 +80,7 @@
 //!     };
 //!
 //!     let state = f_protocol.process_message(
-//!         reply,
+//!         reply.as_slice(),
 //!         &State::StartReceive {
 //!             path: target_path.to_string(),
 //!         },
