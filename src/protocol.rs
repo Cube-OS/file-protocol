@@ -606,6 +606,7 @@ impl Protocol {
                     hash: hash.to_string(),
                 })?;
                 storage::delete_file(&self.config.storage_prefix, hash)?;
+                self.stored_files.lock().unwrap().remove(target_path);
                 Ok(())
             }
             Err(e) => {
