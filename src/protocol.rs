@@ -479,6 +479,7 @@ impl Protocol {
             if path.is_file() {
                 match self.initialize_file(&source_path.clone().unwrap()) {
                     Ok((_file_name, hash, num_chunks, mode)) => {
+                        debug!("Download: {:?}", path.to_str().unwrap());
                         self.send(Message::SuccessTransmit{
                             channel_id,
                             file_name: path.to_str().unwrap().to_string(),
@@ -508,6 +509,7 @@ impl Protocol {
                 let directory = path.to_str().unwrap().to_string();
                 match self.initialize_directory(directory) {
                     Ok(results) => {
+                        debug!("Results: {:?}", results);
                         let mut results_iter = results.clone().into_iter().peekable();
                         while let Some((file_name,hash,num_chunks,mode)) = results_iter.next() {                                        
                             self.send(Message::SuccessTransmit{
@@ -547,6 +549,7 @@ impl Protocol {
             let directory = "/home/kubos/download/".to_string();
             match self.initialize_directory(directory) {
                 Ok(results) => {
+                    debug!("results: {:?}", results);
                     let mut results_iter = results.clone().into_iter().peekable();
                     while let Some((file_name,hash,num_chunks,mode)) = results_iter.next() {                                        
                         self.send(Message::SuccessTransmit{
