@@ -438,7 +438,7 @@ impl Protocol {
     /// ```
     ///
     pub fn initialize_file(&self, source_path: &str) -> Result<(String, String, u32, u32), ProtocolError> {
-        match self.stored_files.lock().unwrap().get(&source_path.clone().to_string()) {
+        match self.stored_files.lock().unwrap().get(&source_path.to_string()) {
             Some((file_name, hash, num_chunks, mode)) => Ok((file_name.to_string(), hash.to_string(), *num_chunks, *mode)),
             None => storage::initialize_file(
                 &self.config.storage_prefix,
@@ -472,7 +472,7 @@ impl Protocol {
 
     /// Initialize a file for transfer
     fn initialize(&self, channel_id: u32, source_path: &Option<String>) -> Result<State, ProtocolError> {
-        let mut new_state = State::Done;
+        let new_state;
 
         if source_path.is_some() {
             let path = std::path::Path::new(source_path.as_ref().unwrap());
